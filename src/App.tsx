@@ -5,6 +5,8 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import LayoutMain from "./components/LayoutMain";
 
 // ==== Lazy Loaded Pages ====
+const Home = lazy(() => import("./pages/Home/Home"));  // 🔥 صفحه اصلی
+
 const Login = lazy(() => import("./pages/Auth/Login"));
 const Register = lazy(() => import("./pages/Auth/Register"));
 const ForgotPassword = lazy(() => import("./pages/Auth/ForgotPassword"));
@@ -24,7 +26,7 @@ const AthleteDashboard = lazy(() => import("./pages/Athlete/Dashboard"));
 const MembershipPage = lazy(() => import("./pages/Athlete/Membership"));
 
 const PaymentResult = lazy(() => import("./pages/Payment/Result"));
-//const PaymentMock = lazy(() => import("./pages/Payment/MockPay"));
+
 
 // Component that decides which dashboard to load
 const DashboardSwitch: React.FC = () => {
@@ -51,18 +53,31 @@ const App: React.FC = () => {
         <LayoutMain>
             <Suspense fallback={<div>در حال بارگذاری...</div>}>
                 <Routes>
-                    {/* Auto-redirect based on login */}
-                    <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
 
-                    {/* Public Routes */}
+                    {/* ------------------------ */}
+                    {/*         PUBLIC           */}
+                    {/* ------------------------ */}
+
+                    {/* صفحه اصلی */}
+                    <Route
+                        path="/"
+                        element={
+                            user ? <Navigate to="/dashboard" replace /> : <Home />
+                        }
+                    />
+
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
                     <Route path="/forgot" element={<ForgotPassword />} />
 
-                    {/* Payment */}
+                    {/* Payment (عمومی) */}
                     <Route path="/payments/result" element={<PaymentResult />} />
 
-                    {/* Protected Dashboard */}
+
+                    {/* ------------------------ */}
+                    {/*         PROTECTED        */}
+                    {/* ------------------------ */}
+
                     <Route
                         path="/dashboard"
                         element={
@@ -72,7 +87,31 @@ const App: React.FC = () => {
                         }
                     />
 
-                    {/* Catch-all 404 */}
+                    {/* نمونه مسیرهای GymAdmin */}
+                    <Route
+                        path="/gymadmin/members"
+                        element={
+                            <ProtectedRoute>
+                                <Members />
+                            </ProtectedRoute>
+                        }
+                    />
+
+                    <Route
+                        path="/gymadmin/movements"
+                        element={
+                            <ProtectedRoute>
+                                <Movements />
+                            </ProtectedRoute>
+                        }
+                    />
+					<Route path="/athlete/dashboard" element={
+						<ProtectedRoute roles={['Athlete']}>
+						<AthleteDashboard />
+						</ProtectedRoute>
+					} />
+
+                    {/* 404 */}
                     <Route path="*" element={<div>صفحه پیدا نشد</div>} />
                 </Routes>
             </Suspense>

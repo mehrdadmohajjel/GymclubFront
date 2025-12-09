@@ -1,0 +1,31 @@
+.layout {
+    display: flex;
+    min-height: 100vh;
+}
+
+.sidebar {
+    width: 260px;
+    background: var(--card);
+    padding: 20px;
+    border-left: 3px solid var(--primary);
+}
+
+.sidebar a {
+    display: block;
+    padding: 12px 10px;
+    margin: 10px 0;
+    border-radius: 8px;
+    text-decoration: none;
+    color: var(--text);
+    transition: 0.2s;
+}
+
+.sidebar a:hover {
+    background: var(--primary);
+    color: #000;
+}
+
+.content-area {
+    flex: 1;
+    padding: 30px;
+}
