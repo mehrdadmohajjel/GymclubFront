@@ -5,12 +5,14 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import LayoutMain from "./components/LayoutMain";
 
 // ==== Lazy Loaded Pages ====
-const Home = lazy(() => import("./pages/Home/Home"));  // 🔥 صفحه اصلی
+const Home = lazy(() => import("./pages/Home/Home"));
 
+// Auth
 const Login = lazy(() => import("./pages/Auth/Login"));
 const Register = lazy(() => import("./pages/Auth/Register"));
 const ForgotPassword = lazy(() => import("./pages/Auth/ForgotPassword"));
 
+// Dashboards
 const SuperAdminDashboard = lazy(() => import("./pages/SuperAdmin/Dashboard"));
 const GymsManagement = lazy(() => import("./pages/SuperAdmin/GymsManagement"));
 
@@ -25,14 +27,14 @@ const CreateWorkout = lazy(() => import("./pages/Trainer/CreateWorkout"));
 const AthleteDashboard = lazy(() => import("./pages/Athlete/Dashboard"));
 const MembershipPage = lazy(() => import("./pages/Athlete/Membership"));
 
+// Payment
 const PaymentResult = lazy(() => import("./pages/Payment/Result"));
 
 
-// Component that decides which dashboard to load
+// ========= Dashboard Switch (Redirect by Role) =========
 const DashboardSwitch: React.FC = () => {
     const { user } = useContext(AuthContext);
-
-    if (!user) return <Navigate to="/login" replace />;
+    if (!user) return <Navigate to="/auth/login" replace />;
 
     switch (user.role) {
         case "SuperAdmin":
@@ -46,19 +48,21 @@ const DashboardSwitch: React.FC = () => {
     }
 };
 
+
+// ========================== APP ==========================
 const App: React.FC = () => {
     const { user } = useContext(AuthContext);
 
     return (
         <LayoutMain>
             <Suspense fallback={<div>در حال بارگذاری...</div>}>
+
                 <Routes>
 
                     {/* ------------------------ */}
                     {/*         PUBLIC           */}
                     {/* ------------------------ */}
 
-                    {/* صفحه اصلی */}
                     <Route
                         path="/"
                         element={
@@ -66,11 +70,12 @@ const App: React.FC = () => {
                         }
                     />
 
-                    <Route path="/login" element={<Login />} />
-                    <Route path="/register" element={<Register />} />
-                    <Route path="/forgot" element={<ForgotPassword />} />
+                    {/* AUTH PATHS (با prefix /auth) */}
+                    <Route path="/auth/login" element={<Login />} />
+                    <Route path="/auth/register" element={<Register />} />
+                    <Route path="/auth/forgot" element={<ForgotPassword />} />
 
-                    {/* Payment (عمومی) */}
+                    {/* Payment عمومی */}
                     <Route path="/payments/result" element={<PaymentResult />} />
 
 
@@ -78,6 +83,7 @@ const App: React.FC = () => {
                     {/*         PROTECTED        */}
                     {/* ------------------------ */}
 
+                    {/* Dashboard بر اساس نقش */}
                     <Route
                         path="/dashboard"
                         element={
@@ -87,11 +93,11 @@ const App: React.FC = () => {
                         }
                     />
 
-                    {/* نمونه مسیرهای GymAdmin */}
+                    {/* Gym Admin Routes */}
                     <Route
                         path="/gymadmin/members"
                         element={
-                            <ProtectedRoute>
+                            <ProtectedRoute roles={["GymAdmin"]}>
                                 <Members />
                             </ProtectedRoute>
                         }
@@ -100,20 +106,37 @@ const App: React.FC = () => {
                     <Route
                         path="/gymadmin/movements"
                         element={
-                            <ProtectedRoute>
+                            <ProtectedRoute roles={["GymAdmin"]}>
                                 <Movements />
                             </ProtectedRoute>
                         }
                     />
-					<Route path="/athlete/dashboard" element={
-						<ProtectedRoute roles={['Athlete']}>
-						<AthleteDashboard />
-						</ProtectedRoute>
-					} />
+
+                    <Route
+                        path="/gymadmin/buffet"
+                        element={
+                            <ProtectedRoute roles={["GymAdmin"]}>
+                                <Buffet />
+                            </ProtectedRoute>
+                        }
+                    />
+
+                    {/* Athlete */}
+                    <Route
+                        path="/athlete/dashboard"
+                        element={
+                            <ProtectedRoute roles={["Athlete"]}>
+                                <AthleteDashboard />
+                            </ProtectedRoute>
+                        }
+                    />
+
 
                     {/* 404 */}
                     <Route path="*" element={<div>صفحه پیدا نشد</div>} />
+
                 </Routes>
+
             </Suspense>
         </LayoutMain>
     );

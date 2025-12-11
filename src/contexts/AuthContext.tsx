@@ -1,5 +1,5 @@
 ﻿import React, { createContext, useEffect, useState, useCallback } from "react";
-import { jwtDecode } from "jwt-decode"; 
+import { jwtDecode } from "jwt-decode";
 import api from "../api/axios";
 
 export type User = {
@@ -9,12 +9,19 @@ export type User = {
     nationalCode?: string;
 };
 
+type LoginResult = {
+    success: boolean;
+    message?: string;
+    user?: User | null;
+};
+
+
 type AuthContextType = {
     user: User | null;
     isAuthenticated: boolean;
     loading: boolean;
     initializing: boolean;
-    login: (accessToken: string, refreshToken: string) => Promise<void>;
+    login: (email: string, password: string, remember: boolean) => Promise<LoginResult>;
     logout: () => void;
 };
 
@@ -23,8 +30,8 @@ export const AuthContext = createContext<AuthContextType>({
     isAuthenticated: false,
     loading: false,
     initializing: true,
-    login: async () => { },
-    logout: () => { }
+    login: async () => ({ success: false }),
+    logout: () => {}
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -32,36 +39,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [loading, setLoading] = useState(false);
     const [initializing, setInitializing] = useState(true);
 
-    // ------ Storage layer ------
+    // Storage Layer
     const getTokens = () => ({
-        accessToken: localStorage.getItem("accessToken"),
-        refreshToken: localStorage.getItem("refreshToken")
+        accessToken: localStorage.getItem("accessToken") ?? sessionStorage.getItem("accessToken"),
+        refreshToken: localStorage.getItem("refreshToken") ?? sessionStorage.getItem("refreshToken")
     });
 
-    const saveTokens = (at: string, rt: string) => {
-        localStorage.setItem("accessToken", at);
-        localStorage.setItem("refreshToken", rt);
+    const saveTokens = (access: string, refresh: string, remember: boolean) => {
+        if (remember) {
+            localStorage.setItem("accessToken", access);
+            localStorage.setItem("refreshToken", refresh);
+        } else {
+            sessionStorage.setItem("accessToken", access);
+            sessionStorage.setItem("refreshToken", refresh);
+        }
     };
 
     const clearTokens = () => {
         localStorage.removeItem("accessToken");
         localStorage.removeItem("refreshToken");
+        sessionStorage.removeItem("accessToken");
+        sessionStorage.removeItem("refreshToken");
     };
 
-    // ------ Decode User ------
+    // Decode JWT
     const decodeUser = (token: string): User | null => {
         try {
             const decoded: any = jwtDecode(token);
-
-            const id =
-                decoded["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"] ||
-                decoded.nameid ||
-                decoded.sub;
-
-            if (!id) return null;
-
             return {
-                id,
+                id: decoded.sub || decoded.nameid,
                 role: decoded.role,
                 gymId: decoded.gymId,
                 nationalCode: decoded.nationalCode
@@ -71,52 +77,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     };
 
-    // ------ Check token expiration ------
-    const isExpired = (token: string): boolean => {
+    // Check expiration
+    const isExpired = (token: string) => {
         try {
             const decoded: any = jwtDecode(token);
-            if (!decoded.exp) return true;
-
-            const now = Math.floor(Date.now() / 1000);
-            return decoded.exp < now;
+            return decoded.exp * 1000 < Date.now();
         } catch {
             return true;
         }
     };
 
-    // ------ Auto refresh ------
+    // Auto refresh
     const refreshAccessToken = useCallback(async () => {
         const { refreshToken } = getTokens();
         if (!refreshToken) return null;
 
         try {
             const res = await api.post("/auth/refresh", { refreshToken });
+            const at = res.data.accessToken;
+            const rt = res.data.refreshToken ?? refreshToken;
 
-            const newAT = res.data?.accessToken;
-            const newRT = res.data?.refreshToken ?? refreshToken;
-
-            if (newAT) {
-                saveTokens(newAT, newRT);
-                const decodedUser = decodeUser(newAT);
-                setUser(decodedUser);
-                return newAT;
-            }
-
-            logout();
-            return null;
+            saveTokens(at, rt, true);
+            const decoded = decodeUser(at);
+            setUser(decoded);
+            return at;
         } catch {
             logout();
             return null;
         }
     }, []);
 
-    // ------ Auto login on page load ------
+    // Auto login on load
     useEffect(() => {
-        const { accessToken } = getTokens();
-
         const init = async () => {
+            const { accessToken } = getTokens();
             if (!accessToken) {
-                setUser(null);
                 setInitializing(false);
                 return;
             }
@@ -124,8 +119,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (isExpired(accessToken)) {
                 await refreshAccessToken();
             } else {
-                const decodedUser = decodeUser(accessToken);
-                setUser(decodedUser);
+                setUser(decodeUser(accessToken));
             }
 
             setInitializing(false);
@@ -134,49 +128,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         init();
     }, []);
 
-    // ------ Login ------
-    const login = async (accessToken: string, refreshToken: string) => {
+    // LOGIN function
+    const login = async (email: string, password: string, remember: boolean): Promise<LoginResult> => {
         setLoading(true);
 
-        saveTokens(accessToken, refreshToken);
+        try {
+            const res = await api.post("/auth/login", { email, password });
 
-        const decoded = decodeUser(accessToken);
-        setUser(decoded);
+            const accessToken = res.data.accessToken;
+            const refreshToken = res.data.refreshToken;
 
-        setLoading(false);
+            saveTokens(accessToken, refreshToken, remember);
+
+            const decoded = decodeUser(accessToken);
+            setUser(decoded);
+
+            setLoading(false);
+
+            return { success: true, user: decoded };
+
+        } catch (err: any) {
+            setLoading(false);
+
+            return {
+                success: false,
+                message: err?.response?.data?.error ?? "خطا در ورود"
+            };
+        }
     };
 
-    // ------ Logout ------
     const logout = () => {
         clearTokens();
         setUser(null);
         window.location.href = "/login";
     };
 
-    // ------ Multi-tab logout sync ------
-    useEffect(() => {
-        const onStorage = (e: StorageEvent) => {
-            if (e.key === "accessToken" && !e.newValue) {
-                logout();
-            }
-        };
-        window.addEventListener("storage", onStorage);
-        return () => window.removeEventListener("storage", onStorage);
-    }, []);
-
-    const isAuthenticated = Boolean(user);
-
     return (
-        <AuthContext.Provider
-            value={{
-                user,
-                isAuthenticated,
-                loading,
-                initializing,
-                login,
-                logout
-            }}
-        >
+        <AuthContext.Provider value={{
+            user,
+            isAuthenticated: Boolean(user),
+            loading,
+            initializing,
+            login,
+            logout
+        }}>
             {children}
         </AuthContext.Provider>
     );
